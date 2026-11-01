@@ -32,13 +32,14 @@ spring:
       genai:
         api-key: ${GEMINI_FREE_API_KEY}
         chat:
-          options:
             model: gemini-3.5-flash-lite
             temperature: 0.2
         embedding:
-            model: gemini-embedding-001
+            api-key: ${GEMINI_FREE_API_KEY}
+            text:
+              model: gemini-embedding-001
             # Optional: Shrink size down to 768 or 1536 to save space if needed
-        #            dimensions: 1536
+              dimensions: 1536
 
     #    ollama:
 #        base-url: http://localhost:11434
