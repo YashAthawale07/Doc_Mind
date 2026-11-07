@@ -84,6 +84,7 @@ public class DocumentIngestionService {
             }
 
 
+
 //            3. write chunks and embedding to pg vector
             log.info("Writing {} vector chunks to PgVectorStore for document: {}", enrichedChunks.size(), metadata.getFilename());
             vectorStore.add(enrichedChunks);
