@@ -1,15 +1,16 @@
 package com.project.doc_mind.service;
 
+import com.project.doc_mind.dto.DocumentMetadataDto;
 import com.project.doc_mind.dto.DocumentResponseDto;
 import com.project.doc_mind.entity.DocumentMetadata;
 import com.project.doc_mind.entity.DocumentStatus;
-//import com.project.doc_mind.entity.User;
+import com.project.doc_mind.entity.User;
 import com.project.doc_mind.exception.DocumentProcessingException;
 import com.project.doc_mind.exception.ResourceNotFoundException;
 import com.project.doc_mind.repository.DocumentMetadataRepo;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-//import org.modelmapper.ModelMapper;
+import org.modelmapper.ModelMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
@@ -32,14 +33,14 @@ public class DocumentMetadataService {
     private final DocumentMetadataRepo documentMetadataRepo;
     private final DocumentParserService parserService;
     private final DocumentIngestionService ingestionService;
-//    private final ModelMapper modelMapper;
+    private final ModelMapper modelMapper;
     private final JdbcTemplate jdbcTemplate;
 
 
     //method to upload and parse document
     @Transactional
-    public DocumentResponseDto uploadAndProcess(MultipartFile file) {
-//            , User user
+    public DocumentResponseDto uploadAndProcess(MultipartFile file, User user) {
+
         String fileName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "document";
         String contentType = file.getContentType() != null ? file.getContentType() : "application/octat-stream";
 
@@ -52,7 +53,7 @@ public class DocumentMetadataService {
                 .status(DocumentStatus.UPLOADING)
                 .fileSize(file.getSize())
                 .createdAt(LocalDateTime.now())
-//                .user(user)
+                .user(user)
                 .build();
 
 
@@ -86,67 +87,68 @@ public class DocumentMetadataService {
                 .chunksCreated(chunksCreated)
                 .status(documentMetadata.getStatus())
                 .message("Document successfully processed and indexed.")
-//                .userId(user.getId())
+                .userId(user.getId())
                 .build();
 
 
     }
 
-//    public List<DocumentResponseDto> uploadMultipleDocuments(List<MultipartFile> files, User user) {
-//
-//
-//        List<DocumentResponseDto> responseDtos = new ArrayList<>();
-//
-//        for (MultipartFile file : files) {
-//            DocumentResponseDto result = this.uploadAndProcess(file, user);
-//            responseDtos.add(result);
-//        }
-//
-//        return responseDtos;
-//
-//
-//    }
+    public List<DocumentResponseDto> uploadMultipleDocuments(List<MultipartFile> files, User user) {
+
+
+        List<DocumentResponseDto> responseDtos = new ArrayList<>();
+
+        for (MultipartFile file : files) {
+            DocumentResponseDto result = this.uploadAndProcess(file, user);
+            responseDtos.add(result);
+        }
+
+        return responseDtos;
+
+
+    }
+
 
 
     //    to get all the documents: This method is useful for admin
-//    public List<DocumentMetadataDto> getAllDocuments() {
-//
-//        List<DocumentMetadata> allDocuments = documentMetadataRepo.findAllByOrderByCreatedAtDesc();
-//        return allDocuments.stream()
-//                .map(documentMetadata -> modelMapper.map(documentMetadata, DocumentMetadataDto.class))
-//                .toList();
-//
-//    }
+    public List<DocumentMetadataDto> getAllDocuments() {
 
-//    public List<DocumentMetadataDto> getAllDocumentsByUser(User user) {
-//        List<DocumentMetadata> documents = documentMetadataRepo.findByUserOrderByCreatedAtDesc(user);
-//        return documents.stream()
-//                .map(documentMetadata -> modelMapper.map(documentMetadata, DocumentMetadataDto.class))
-//                .toList();
-//    }
+        List<DocumentMetadata> allDocuments = documentMetadataRepo.findAllByOrderByCreatedAtDesc();
+        return allDocuments.stream()
+                .map(documentMetadata -> modelMapper.map(documentMetadata, DocumentMetadataDto.class))
+                .toList();
 
-//    public DocumentMetadataDto getDocumentById(UUID id) {
-//        DocumentMetadata documentMetadata = documentMetadataRepo.findById(id).orElseThrow(() -> new ResourceNotFoundException("Document with given id not found !!"));
-//        return modelMapper.map(documentMetadata, DocumentMetadataDto.class);
-//
-//
-//    }
+    }
 
-//    @Transactional
-//    public void deleteDocument(UUID id) {
-//        DocumentMetadata documentMetadata = documentMetadataRepo.findById(id).orElseThrow(() -> new ResourceNotFoundException("Document with given id not found !!"));
-//
-//
-//        documentMetadataRepo.delete(documentMetadata);
-//        //delete the vector entries
-//        try {
-//            String deleteVectorsSql = "DELETE FROM vector_store WHERE metadata->>'documentId' = ?";
-//            int deletedCount = jdbcTemplate.update(deleteVectorsSql, id.toString());
-//            log.info("Deleted {} vector chunks for document id {} ", deletedCount, id);
-//
-//        } catch (Exception e) {
-//            log.warn("cloud not delete vectors from vector store directly: {}", e.getMessage());
-//        }
+    public List<DocumentMetadataDto> getAllDocumentsByUser(User user) {
+        List<DocumentMetadata> documents = documentMetadataRepo.findByUserOrderByCreatedAtDesc(user);
+        return documents.stream()
+                .map(documentMetadata -> modelMapper.map(documentMetadata, DocumentMetadataDto.class))
+                .toList();
+    }
 
-//    }
+    public DocumentMetadataDto getDocumentById(UUID id) {
+        DocumentMetadata documentMetadata = documentMetadataRepo.findById(id).orElseThrow(() -> new ResourceNotFoundException("Document with given id not found !!"));
+        return modelMapper.map(documentMetadata, DocumentMetadataDto.class);
+
+
+    }
+
+    @Transactional
+    public void deleteDocument(UUID id) {
+        DocumentMetadata documentMetadata = documentMetadataRepo.findById(id).orElseThrow(() -> new ResourceNotFoundException("Document with given id not found !!"));
+
+
+        documentMetadataRepo.delete(documentMetadata);
+        //delete the vector entries
+        try {
+            String deleteVectorsSql = "DELETE FROM vector_store WHERE metadata->>'documentId' = ?";
+            int deletedCount = jdbcTemplate.update(deleteVectorsSql, id.toString());
+            log.info("Deleted {} vector chunks for document id {} ", deletedCount, id);
+
+        } catch (Exception e) {
+            log.warn("cloud not delete vectors from vector store directly: {}", e.getMessage());
+        }
+
+    }
 }

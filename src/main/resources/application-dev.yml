@@ -80,20 +80,20 @@ app:
 #jwt configurations
 
 
-#jwt:
-#  secret: ${JWT_SECRET:sdafasfasfasdhfojhascapfdaDHAfbashfabfashfasbfshfdasfhqf}
-#  expiration: 3600000
-#
-#
-#bootui:
-#  enabled: ON
-#
-#
-#logging:
-#  level:
-#    org:
-#      springframework:
-#        ai:
-#          chat:
-#            client:
-#              advisor: DEBUG
+jwt:
+  secret: ${JWT_SECRET:sdafasfasfasdhfojhascapfdaDHAfbashfabfashfasbfshfdasfhqf}
+  expiration: 3600000
+
+
+bootui:
+  enabled: ON
+
+
+logging:
+  level:
+    org:
+      springframework:
+        ai:
+          chat:
+            client:
+              advisor: DEBUG
