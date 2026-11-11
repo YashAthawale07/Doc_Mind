@@ -1,189 +1,136 @@
 # DocMind
 
-DocMind is a Spring Boot document-intelligence backend that lets authenticated users upload documents, index their content as vector embeddings, search semantically, and ask questions through a retrieval-augmented generation (RAG) pipeline.
+> **Turn your documents into an interactive knowledge partner.**
 
-## What is implemented
+DocMind is an AI document intelligence assistant for understanding technical documents, manuals, contracts, reports, and software engineering materials. Upload your files, explore their content, search by meaning, and have natural conversations grounded in the information that matters.
 
-| Capability | Implementation |
-|---|---|
-| User login and authentication | Registration, BCrypt password hashing, JWT login, stateless Spring Security |
-| Multiple document upload | Single and sequential multi-file upload endpoints |
-| Document processing and chunking | PDF page parsing, Apache Tika parsing for other supported formats, `TokenTextSplitter` chunking |
-| Vector embeddings | Spring AI Google Gemini embedding model (`gemini-embedding-001`) |
-| PGVector storage | PostgreSQL `pgvector` store with HNSW index and cosine distance |
-| Semantic search | Filtered similarity search with configurable top-k and threshold |
-| RAG pipeline | Retrieves relevant chunks, adds source context, and sends the prompt to Gemini |
-| AI chat with documents | Normal and Server-Sent Events (SSE) streaming chat, citations, response timing |
-| Persistent chat memory | JPA-backed conversations and messages in PostgreSQL |
-| Spring Boot backend | REST API, validation, global error responses, OpenAPI/Swagger documentation |
+DocMind combines document-grounded answers with broad general knowledge, making it useful both for precise source-based research and flexible everyday questions.
 
-## Architecture
+## Why DocMind
+
+- **Ask instead of browse** — Get direct answers from your documents in a conversational workspace.
+- **Trust the context** — Responses include source citations, document names, page numbers, and relevant excerpts.
+- **Search by meaning** — Find concepts, clauses, facts, definitions, and related passages without relying only on exact keywords.
+- **Keep exploring** — Inspect indexed vector chunks to understand how your documents are represented and retrieved.
+- **Work naturally** — Receive clear, structured Markdown responses with formatted lists, tables, quotations, and syntax-highlighted code.
+
+## Product experience
+
+### AI document chat
+
+Ask questions about one selected document or across your document library. DocMind supports both standard responses and real-time streaming answers, with conversation history for continued research.
+
+### Multi-document workspace
+
+Upload multiple PDF, DOCX, TXT, Markdown, or CSV files through a drag-and-drop interface. Upload progress, processing status, file metadata, page counts, and indexed chunk counts are visible in the workspace.
+
+### Semantic search
+
+Search indexed content using natural language. Adjust the number of results and minimum similarity threshold, then review ranked matches with similarity scores, source pages, snippets, and metadata.
+
+### Vector chunk explorer
+
+Inspect the chunks created during document processing, filter them by text, view metadata, and copy content for further use. This provides transparency into the retrieval layer behind every answer.
+
+### Focused, polished interface
+
+The React frontend provides:
+
+- Secure sign-in and account creation screens
+- Responsive dashboard layout with document and chat sidebars
+- Document selection for focused Q&A and search
+- Conversation history with new, rename, and delete actions
+- Streaming mode controls
+- Markdown rendering and code syntax highlighting
+- Citation cards with expandable source details
+- Loading states, upload progress, notifications, and error boundaries
+- Mobile-friendly sidebar navigation
+
+## How it works
 
 ```mermaid
 flowchart LR
-    Client[Frontend / API Client] --> Auth[JWT Authentication]
-    Client --> Documents[Document REST API]
-    Client --> Chat[Chat and Search REST API]
-    Auth --> Security[Spring Security Filter Chain]
-    Documents --> Parser[PDF / Tika Parser]
-    Parser --> Chunker[TokenTextSplitter]
-    Chunker --> Embed[Gemini Embeddings]
-    Embed --> Vector[(PostgreSQL + PGVector)]
-    Chat --> Retrieve[User-filtered Similarity Search]
-    Retrieve --> Vector
-    Retrieve --> Prompt[Document Context + Question]
-    Prompt --> Gemini[Gemini Chat Model]
-    Gemini --> Chat
-    Chat --> Memory[(JPA Chat Memory)]
-    Memory --> PostgreSQL[(PostgreSQL)]
+    User[User] --> UI[DocMind Web App]
+    UI --> Upload[Upload Documents]
+    Upload --> Parse[Parse and Chunk]
+    Parse --> Embed[Generate Embeddings]
+    Embed --> Store[(PGVector)]
+    UI --> Query[Chat or Semantic Search]
+    Query --> Retrieve[Retrieve Relevant Chunks]
+    Retrieve --> Store
+    Retrieve --> Context[Build Grounded Context]
+    Context --> AI[AI Response]
+    AI --> UI
 ```
 
-### Request flow
+1. Documents are parsed into readable content.
+2. Content is split into searchable chunks.
+3. Chunks are converted into vector embeddings and stored for retrieval.
+4. A question is matched against the most relevant document content.
+5. The AI uses that context to generate a clear answer with citations.
 
-1. A user registers or logs in and receives a JWT.
-2. The JWT filter loads the user and places the authenticated `User` in the security context.
-3. Uploading creates `DocumentMetadata`, parses the file, splits it into chunks, adds document/user metadata, and writes embeddings to PGVector.
-4. Chat and search retrieve chunks using `userId` and, optionally, `documentId` filters.
-5. The retrieved text is supplied as document context to the Gemini chat model.
-6. Chat messages are persisted by `JpaChatMemory` under a conversation ID, and chat responses include source citations.
+## Technology
 
-## API endpoints
+### Frontend
 
-All `/api/v1/**` endpoints require a bearer token unless noted otherwise.
+- React 19
+- TypeScript
+- Vite
+- Tailwind CSS
+- Zustand
+- React Router
+- Framer Motion
+- React Markdown and Prism
+- Axios
+- React Dropzone
 
-### Authentication
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| `POST` | `/api/v1/auth/register` | Create a user account |
-| `POST` | `/api/v1/auth/login` | Authenticate and return a JWT |
-
-### Documents
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| `POST` | `/api/v1/documents/upload` | Upload and index one document |
-| `POST` | `/api/v1/documents/upload-multiple` | Upload and index multiple documents sequentially |
-| `GET` | `/api/v1/documents/user` | List documents owned by the authenticated user |
-| `GET` | `/api/v1/documents/{id}` | Get document metadata |
-| `DELETE` | `/api/v1/documents/{id}` | Delete metadata and matching vector rows |
-| `GET` | `/api/v1/documents` | List all documents; admin-only |
-
-PDF files are parsed page by page. Other formats are delegated to Apache Tika; the controller advertises PDF, DOCX, text, Markdown, and CSV support.
-
-### Chat and search
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| `POST` | `/api/v1/chat/query` | Ask a question and receive a JSON response with citations |
-| `POST` | `/api/v1/chat/stream` | Stream answer content as SSE events |
-| `POST` | `/api/v1/chat/search/similarity` | Return matching chunks and similarity citations |
-
-Example chat request:
-
-```json
-{
-  "question": "What are the main conclusions?",
-  "documentId": "optional-document-uuid",
-  "topK": 5,
-  "minSimilarity": 0.2,
-  "conversationId": "optional-conversation-id"
-}
-```
-
-## Data model
-
-- `users`: credentials, email, and role (`USER` or `ADMIN`).
-- `document_metadata`: filename, content type, size, processing status, page/chunk counts, timestamps, and owning user.
-- `vector_store`: Spring AI PGVector table containing embeddings, chunk text, and metadata such as `documentId`, `userId`, `fileName`, `chunkIndex`, and `pageNumber`.
-- `conversations` and `chat_messages`: persistent conversation history used by Spring AI's chat-memory advisor.
-
-Document processing statuses are `UPLOADING`, `PROCESSING`, `INDEXED`, and `FAILED`.
-
-## Technology stack
+### Backend and AI
 
 - Java 21
-- Spring Boot 4.1.2
-- Spring Security and JJWT 0.13.0
-- Spring AI 2.0.1
+- Spring Boot
+- Spring Security with JWT authentication
+- Spring AI
 - Google Gemini chat and embedding models
-- PostgreSQL 16 with `pgvector`
-- Spring Data JPA / Hibernate
-- Apache Tika and Spring AI PDF reader
-- Springdoc OpenAPI / Swagger UI
-- Maven
+- PostgreSQL with PGVector
+- Apache Tika and PDF document parsing
+- Spring Data JPA
+
+## Screenshots
+
+The repository includes interface screenshots in [`frontend/screenshots`](./frontend/screenshots).
+
+## Project structure
+
+```text
+Doc_Mind/
+├── frontend/
+│   ├── docmind-frontend/       # React + TypeScript web application
+│   └── screenshots/             # Product screenshots
+├── src/main/java/               # Spring Boot backend
+├── src/main/resources/          # Application configuration
+├── docker-compose.yml           # Local PostgreSQL + PGVector service
+└── README.md
+```
 
 ## Run locally
 
-### Prerequisites
-
-- Java 21
-- Docker
-- A Gemini API key
-
-### Start PostgreSQL with PGVector
+### Backend
 
 ```bash
 docker compose up -d postgres
+bash mvnw spring-boot:run
 ```
 
-The database is exposed at `localhost:5434` and initialized as `docmind`. `init.sql` enables the `vector` and `uuid-ossp` extensions.
-
-### Configure environment variables
+### Frontend
 
 ```bash
-export GEMINI_FREE_API_KEY="your-gemini-api-key"
-export JWT_SECRET="replace-with-a-long-random-secret"
+cd frontend/docmind-frontend
+npm install
+npm run dev
 ```
 
-Optional database variables are `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD`. Defaults match the Docker Compose database.
+The frontend is configured for a local development workflow with the Spring Boot API. For deployment, provide the backend's AI and database configuration through your environment or hosting platform.
 
-### Start the application
+## Vision
 
-```bash
-./mvnw spring-boot:run
-```
-
-The API runs on `http://localhost:8081`.
-
-- Swagger UI: `http://localhost:8081/swagger-ui.html`
-- OpenAPI JSON: `http://localhost:8081/v3/api-docs`
-
-Upload limits are 25 MB per file and 50 MB per request.
-
-## RAG and vector configuration
-
-The active development profile configures:
-
-- Embedding dimensions: `1536`
-- PGVector table: `vector_store`
-- Index: `HNSW`
-- Distance: cosine
-- Chunk size: `700`
-- Default top-k: `5`
-- Similarity threshold: `0.0`
-
-These settings are in `src/main/resources/application-dev.yml`. The `AppProperties` class also defines minimum chunk and maximum chunk-count safeguards.
-
-## Security and isolation notes
-
-Authentication is stateless and uses JWT bearer tokens. Uploaded chunks receive the authenticated user's ID, and chat/search vector retrieval applies a `userId` filter. User document listing is also scoped through `findByUserOrderByCreatedAtDesc`.
-
-Before production use, document ownership checks should also be enforced in `GET /api/v1/documents/{id}` and `DELETE /api/v1/documents/{id}`. Those service methods currently look up documents by ID without the authenticated user, so a user who knows another document ID may access or delete it. Chat memory creation should likewise always associate a newly created conversation with its authenticated user, and the non-streaming chat method should reuse one generated conversation ID consistently for persistence, the advisor, and the response.
-
-Other production hardening items include replacing the development JWT fallback secret, restricting the wildcard CORS origin, validating registration fields consistently, and avoiding `show-sql`/verbose framework logging outside development.
-
-## Project layout
-
-```text
-src/main/java/com/project/doc_mind/
-├── config/       Security, JWT filter, CORS, application configuration
-├── controllers/  Authentication, document, chat, and search endpoints
-├── dto/          API request and response models
-├── entity/       Users, documents, conversations, and chat messages
-├── repository/   Spring Data JPA repositories
-├── service/      Parsing, ingestion, RAG, JWT, user, and chat-memory services
-└── exception/    Domain exceptions and REST error handling
-```
-
-Additional design notes are available in `docs/CHAT_MEMORY_DB_ARCHITECTURE.md`, `docs/USER_DOCUMENT_ISOLATION_ANALYSIS.md`, and `docs/FRONTEND_BUILD_PROMPT.md`.
+DocMind is built to make dense information easier to understand, search, and use. It transforms static files into an approachable, conversational knowledge space where answers stay connected to the source material while remaining helpful beyond it.
